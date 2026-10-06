@@ -61,6 +61,7 @@ mutex g_DieLock;
 static void CompilerInfo();
 
 static map<FILE *, string> FileToFileName;
+static mutex s_FileToFileNameLock; // guards FileToFileName and AllocBuffer (convert threads open files concurrently)
 
 const unsigned MY_IO_BUFSIZ = 32000;
 const unsigned MAX_FORMATTED_STRING_LENGTH = 64000;
@@ -264,10 +265,18 @@ void LogStdioFileState(FILE *f)
 	__int64 pos64 = _ftelli64(f);
 	Log("_ftelli64  %lld\n", pos64);
 #endif
-	if (FileToFileName.find(f) == FileToFileName.end())
+	string Name;
+	bool Found;
+		{
+		lock_guard<mutex> guard(s_FileToFileNameLock);
+		Found = (FileToFileName.find(f) != FileToFileName.end());
+		if (Found)
+			Name = FileToFileName[f];
+		}
+	if (!Found)
 		Log("Not found in FileToFileName\n");
 	else
-		Log("Name       %s\n", FileToFileName[f].c_str());
+		Log("Name       %s\n", Name.c_str());
 	}
 
 FILE *OpenStdioFile(const string &FileName)
@@ -292,8 +301,11 @@ FILE *OpenStdioFile(const string &FileName)
 		Die("Cannot open %s, errno=%d %s",
 		  FileName.c_str(), Err, StrErr);
 		}
-	AllocBuffer(f);
-	FileToFileName[f] = FileName;
+		{
+		lock_guard<mutex> guard(s_FileToFileNameLock);
+		AllocBuffer(f);
+		FileToFileName[f] = FileName;
+		}
 	return f;
 	}
 
@@ -306,8 +318,11 @@ FILE *CreateStdioFile(const string &FileName)
 	if (0 == f)
 		Die("Cannot create %s, errno=%d %s",
 		  FileName.c_str(), errno, strerror(errno));
-	AllocBuffer(f);
-	FileToFileName[f] = FileName;
+		{
+		lock_guard<mutex> guard(s_FileToFileNameLock);
+		AllocBuffer(f);
+		FileToFileName[f] = FileName;
+		}
 	return f;
 	}
 

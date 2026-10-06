@@ -110,8 +110,11 @@ void sec_kmeans::get_sec_lines(uint alpha_size, vector<string> &lines)
 	Die("get_sec_lines(%u)", alpha_size);
 	}
 
+static mutex s_get_SK_lock; // lazy init below races when several threads build chains
+
 sec_kmeans *sec_kmeans::get_SK(uint alpha_size, uint M)
 	{
+	lock_guard<mutex> guard(s_get_SK_lock);
 	sec_kmeans **ptrSK = 0;
 	sec_kmeans *SK = 0;
 	switch (alpha_size)
